@@ -90,11 +90,28 @@ async function handleProxy(
       body,
     });
 
+    // Handle 204 No Content response
+    if (response.status === 204) {
+      return new NextResponse(null, { status: 204 });
+    }
+
     // Get response data
     let data;
     const contentType = response.headers.get("content-type");
+    const contentLength = response.headers.get("content-length");
+
+    // Check if there's actually content to parse
+    if (contentLength === "0" || !contentType) {
+      return new NextResponse(null, { status: response.status });
+    }
+
     if (contentType?.includes("application/json")) {
-      data = await response.json();
+      const text = await response.text();
+      if (text) {
+        data = JSON.parse(text);
+      } else {
+        return new NextResponse(null, { status: response.status });
+      }
     } else {
       data = await response.text();
     }

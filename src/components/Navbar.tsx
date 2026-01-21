@@ -41,6 +41,16 @@ export function Navbar() {
               >
                 Categories
               </Link>
+              <Link
+                href="/admin/tests"
+                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                  isActive("/admin/tests")
+                    ? "border-blue-500 text-gray-900 dark:text-white"
+                    : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white"
+                }`}
+              >
+                Tests
+              </Link>
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -80,6 +90,16 @@ export function Navbar() {
             }`}
           >
             Categories
+          </Link>
+          <Link
+            href="/admin/tests"
+            className={`px-3 py-2 rounded-md text-sm font-medium ${
+              isActive("/admin/tests")
+                ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            }`}
+          >
+            Tests
           </Link>
         </div>
       </div>
