@@ -54,6 +54,7 @@ export default function EditArticlePage() {
       reset({
         slug: articleData.slug,
         category_id: articleData.category_id,
+        reading_time_minutes: articleData.reading_time_minutes || 1,
         title_uz_latin: articleData.title_uz_latin || "",
         title_uz_cyrillic: articleData.title_uz_cyrillic || "",
         title_ru: articleData.title_ru || "",
@@ -89,6 +90,7 @@ export default function EditArticlePage() {
       const payload: ArticleUpdate = {
         category_id: data.category_id,
         slug: data.slug || undefined,
+        reading_time_minutes: data.reading_time_minutes || undefined,
         title_uz_latin: data.title_uz_latin || undefined,
         title_uz_cyrillic: data.title_uz_cyrillic || undefined,
         title_ru: data.title_ru || undefined,
@@ -352,7 +354,7 @@ export default function EditArticlePage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Category
@@ -375,6 +377,18 @@ export default function EditArticlePage() {
                 <input
                   {...register("slug")}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Reading Time (minutes)
+                </label>
+                <input
+                  {...register("reading_time_minutes", { valueAsNumber: true })}
+                  type="number"
+                  min="1"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="e.g. 5"
                 />
               </div>
             </div>

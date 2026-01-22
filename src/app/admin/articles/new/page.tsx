@@ -30,6 +30,7 @@ export default function NewArticlePage() {
     defaultValues: {
       slug: "",
       category_id: 0,
+      reading_time_minutes: 1,
       title_uz_latin: "",
       title_uz_cyrillic: "",
       title_ru: "",
@@ -73,6 +74,7 @@ export default function NewArticlePage() {
       const payload: ArticleCreate = {
         category_id: data.category_id,
         slug: data.slug || undefined,
+        reading_time_minutes: data.reading_time_minutes || undefined,
         title_uz_latin: data.title_uz_latin || undefined,
         title_uz_cyrillic: data.title_uz_cyrillic || undefined,
         title_ru: data.title_ru || undefined,
@@ -178,7 +180,7 @@ export default function NewArticlePage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Category
@@ -202,6 +204,18 @@ export default function NewArticlePage() {
                   {...register("slug")}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   placeholder="my-article-slug"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Reading Time (minutes)
+                </label>
+                <input
+                  {...register("reading_time_minutes", { valueAsNumber: true })}
+                  type="number"
+                  min="1"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="e.g. 5"
                 />
               </div>
             </div>

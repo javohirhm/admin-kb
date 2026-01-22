@@ -39,6 +39,7 @@ export interface Article {
   content_uz_cyrillic: string;
   content_ru: string;
   content_en: string;
+  reading_time_minutes?: number | null;
   views_count: number;
   published_at?: string | null;
   created_at: string;
@@ -57,6 +58,7 @@ export interface ArticleCreate {
   content_uz_cyrillic?: string;
   content_ru?: string;
   content_en?: string;
+  reading_time_minutes?: number | null;
 }
 
 export interface ArticleUpdate extends Partial<ArticleCreate> {}
