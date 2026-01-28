@@ -12,7 +12,8 @@ import {
   UnauthorizedError,
   ApiError,
 } from "@/lib/api";
-import type { Category, ArticleCreate, LanguageKey } from "@/types";
+import { translateArticle } from "@/lib/translate";
+import { LANGUAGES, type Category, type ArticleCreate, type LanguageKey } from "@/types";
 
 interface ArticleFormData extends ArticleCreate {
   category_id: number;
@@ -23,24 +24,27 @@ export default function NewArticlePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [translateError, setTranslateError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LanguageKey>("uz_latin");
 
-  const { register, handleSubmit, setValue, watch } = useForm<ArticleFormData>({
-    defaultValues: {
-      slug: "",
-      category_id: 0,
-      reading_time_minutes: 1,
-      title_uz_latin: "",
-      title_uz_cyrillic: "",
-      title_ru: "",
-      title_en: "",
-      content_uz_latin: "",
-      content_uz_cyrillic: "",
-      content_ru: "",
-      content_en: "",
-    },
-  });
+  const { register, handleSubmit, setValue, watch, getValues } =
+    useForm<ArticleFormData>({
+      defaultValues: {
+        slug: "",
+        category_id: 0,
+        reading_time_minutes: 1,
+        title_uz_latin: "",
+        title_uz_cyrillic: "",
+        title_ru: "",
+        title_en: "",
+        content_uz_latin: "",
+        content_uz_cyrillic: "",
+        content_ru: "",
+        content_en: "",
+      },
+    });
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -66,23 +70,98 @@ export default function NewArticlePage() {
     fetchCategories();
   }, [fetchCategories]);
 
+  const pickSourceLanguage = (values: ArticleFormData): LanguageKey | null => {
+    const hasText = (lang: LanguageKey) => {
+      const title = String(values[`title_${lang}` as keyof ArticleFormData] || "");
+      const content = String(
+        values[`content_${lang}` as keyof ArticleFormData] || ""
+      );
+      return title.trim() || content.trim();
+    };
+
+    if (hasText(activeTab)) {
+      return activeTab;
+    }
+
+    for (const { key } of LANGUAGES) {
+      if (hasText(key)) {
+        return key;
+      }
+    }
+
+    return null;
+  };
+
   const onSubmit = async (data: ArticleFormData) => {
     try {
       setIsSubmitting(true);
       setError(null);
 
+      let values = getValues();
+      const missingUzLatinTitle = !(values.title_uz_latin || "").trim();
+      const missingUzLatinContent = !(values.content_uz_latin || "").trim();
+
+      if (missingUzLatinTitle || missingUzLatinContent) {
+        const sourceLanguage = pickSourceLanguage(values);
+        if (!sourceLanguage) {
+          setError("Add a title or content before saving.");
+          return;
+        }
+
+        const sourceTitle = String(
+          values[`title_${sourceLanguage}` as keyof ArticleFormData] || ""
+        );
+        const sourceContent = String(
+          values[`content_${sourceLanguage}` as keyof ArticleFormData] || ""
+        );
+
+        try {
+          setIsTranslating(true);
+          const targetLanguages = LANGUAGES.map((lang) => lang.key).filter(
+            (lang) => lang !== sourceLanguage && lang === "uz_latin"
+          );
+
+          const result = await translateArticle({
+            sourceLanguage,
+            targets: targetLanguages,
+            title: sourceTitle,
+            content: sourceContent,
+          });
+
+          for (const [lang, translation] of Object.entries(
+            result.translations
+          ) as [LanguageKey, { title: string; content: string }][]) {
+            setValue(`title_${lang}` as keyof ArticleFormData, translation.title);
+            setValue(
+              `content_${lang}` as keyof ArticleFormData,
+              translation.content
+            );
+          }
+          values = getValues();
+        } catch (err) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to auto-translate required language"
+          );
+          return;
+        } finally {
+          setIsTranslating(false);
+        }
+      }
+
       const payload: ArticleCreate = {
-        category_id: data.category_id,
-        slug: data.slug || undefined,
-        reading_time_minutes: data.reading_time_minutes || undefined,
-        title_uz_latin: data.title_uz_latin || undefined,
-        title_uz_cyrillic: data.title_uz_cyrillic || undefined,
-        title_ru: data.title_ru || undefined,
-        title_en: data.title_en || undefined,
-        content_uz_latin: data.content_uz_latin || undefined,
-        content_uz_cyrillic: data.content_uz_cyrillic || undefined,
-        content_ru: data.content_ru || undefined,
-        content_en: data.content_en || undefined,
+        category_id: values.category_id,
+        slug: values.slug || undefined,
+        reading_time_minutes: values.reading_time_minutes || undefined,
+        title_uz_latin: values.title_uz_latin || undefined,
+        title_uz_cyrillic: values.title_uz_cyrillic || undefined,
+        title_ru: values.title_ru || undefined,
+        title_en: values.title_en || undefined,
+        content_uz_latin: values.content_uz_latin || undefined,
+        content_uz_cyrillic: values.content_uz_cyrillic || undefined,
+        content_ru: values.content_ru || undefined,
+        content_en: values.content_en || undefined,
       };
 
       const article = await createArticle(payload);
@@ -112,10 +191,48 @@ export default function NewArticlePage() {
   };
 
   // Watch content values for the markdown editor
+  const titleUzLatin = watch("title_uz_latin") || "";
+  const titleUzCyrillic = watch("title_uz_cyrillic") || "";
+  const titleRu = watch("title_ru") || "";
+  const titleEn = watch("title_en") || "";
   const contentUzLatin = watch("content_uz_latin") || "";
   const contentUzCyrillic = watch("content_uz_cyrillic") || "";
   const contentRu = watch("content_ru") || "";
   const contentEn = watch("content_en") || "";
+
+  // Compute missing languages for visual indicator
+  const missingLanguages = LANGUAGES.map((lang) => lang.key).filter((lang) => {
+    const title =
+      lang === "uz_latin"
+        ? titleUzLatin
+        : lang === "uz_cyrillic"
+        ? titleUzCyrillic
+        : lang === "ru"
+        ? titleRu
+        : titleEn;
+    const content =
+      lang === "uz_latin"
+        ? contentUzLatin
+        : lang === "uz_cyrillic"
+        ? contentUzCyrillic
+        : lang === "ru"
+        ? contentRu
+        : contentEn;
+    return !title.trim() || !content.trim();
+  });
+
+  const getTitleValue = () => {
+    switch (activeTab) {
+      case "uz_latin":
+        return titleUzLatin;
+      case "uz_cyrillic":
+        return titleUzCyrillic;
+      case "ru":
+        return titleRu;
+      case "en":
+        return titleEn;
+    }
+  };
 
   const getContentValue = () => {
     switch (activeTab) {
@@ -129,6 +246,72 @@ export default function NewArticlePage() {
         return contentEn;
     }
   };
+
+  const handleAutoTranslate = async () => {
+    setTranslateError(null);
+
+    const sourceTitle = (getTitleValue() || "").trim();
+    const sourceContent = (getContentValue() || "").trim();
+    if (!sourceTitle && !sourceContent) {
+      setTranslateError("Enter a title or content before translating.");
+      return;
+    }
+
+    const targetLanguages = LANGUAGES.map((lang) => lang.key).filter(
+      (lang) => lang !== activeTab
+    );
+
+    const existingTargets = targetLanguages.filter((lang) => {
+      const currentTitle = String(
+        getValues(`title_${lang}` as keyof ArticleFormData) || ""
+      );
+      const currentContent = String(
+        getValues(`content_${lang}` as keyof ArticleFormData) || ""
+      );
+      return currentTitle.trim() || currentContent.trim();
+    });
+
+    if (existingTargets.length > 0) {
+      const existingLabels = existingTargets
+        .map(
+          (lang) => LANGUAGES.find((item) => item.key === lang)?.label || lang
+        )
+        .join(", ");
+      if (
+        !confirm(
+          `This will overwrite existing translations for: ${existingLabels}. Continue?`
+        )
+      ) {
+        return;
+      }
+    }
+
+    try {
+      setIsTranslating(true);
+      const result = await translateArticle({
+        sourceLanguage: activeTab,
+        targets: targetLanguages,
+        title: sourceTitle,
+        content: sourceContent,
+      });
+
+      for (const [lang, translation] of Object.entries(
+        result.translations
+      ) as [LanguageKey, { title: string; content: string }][]) {
+        setValue(`title_${lang}` as keyof ArticleFormData, translation.title);
+        setValue(`content_${lang}` as keyof ArticleFormData, translation.content);
+      }
+    } catch (err) {
+      setTranslateError(
+        err instanceof Error ? err.message : "Translation failed"
+      );
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const activeLanguageLabel =
+    LANGUAGES.find((language) => language.key === activeTab)?.label || activeTab;
 
   const setContentValue = (value: string) => {
     switch (activeTab) {
@@ -222,7 +405,29 @@ export default function NewArticlePage() {
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <LanguageTabs activeTab={activeTab} onTabChange={setActiveTab} />
+            <LanguageTabs activeTab={activeTab} onTabChange={setActiveTab} missingLanguages={missingLanguages} />
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Write in one language and auto-translate the rest.
+              </p>
+              <button
+                type="button"
+                onClick={handleAutoTranslate}
+                disabled={isTranslating || isSubmitting}
+                className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 disabled:opacity-60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+              >
+                {isTranslating
+                  ? "Translating..."
+                  : `Auto-translate from ${activeLanguageLabel}`}
+              </button>
+            </div>
+
+            {translateError && (
+              <div className="mt-3 text-sm text-red-600 dark:text-red-400">
+                {translateError}
+              </div>
+            )}
 
             <div className="mt-6 space-y-6">
               {/* Title input for current language */}

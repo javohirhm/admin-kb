@@ -17,7 +17,14 @@ import {
   UnauthorizedError,
   ApiError,
 } from "@/lib/api";
-import type { Article, Category, ArticleUpdate, LanguageKey } from "@/types";
+import { translateArticle } from "@/lib/translate";
+import {
+  LANGUAGES,
+  type Article,
+  type Category,
+  type ArticleUpdate,
+  type LanguageKey,
+} from "@/types";
 
 interface ArticleFormData extends ArticleUpdate {
   category_id: number;
@@ -33,11 +40,13 @@ export default function EditArticlePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [translateError, setTranslateError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LanguageKey>("uz_latin");
 
-  const { register, handleSubmit, setValue, watch, reset } =
+  const { register, handleSubmit, setValue, watch, reset, getValues } =
     useForm<ArticleFormData>();
 
   const fetchData = useCallback(async () => {
@@ -208,10 +217,27 @@ export default function EditArticlePage() {
   };
 
   // Watch content values for the markdown editor
+  const titleUzLatin = watch("title_uz_latin") || "";
+  const titleUzCyrillic = watch("title_uz_cyrillic") || "";
+  const titleRu = watch("title_ru") || "";
+  const titleEn = watch("title_en") || "";
   const contentUzLatin = watch("content_uz_latin") || "";
   const contentUzCyrillic = watch("content_uz_cyrillic") || "";
   const contentRu = watch("content_ru") || "";
   const contentEn = watch("content_en") || "";
+
+  const getTitleValue = () => {
+    switch (activeTab) {
+      case "uz_latin":
+        return titleUzLatin;
+      case "uz_cyrillic":
+        return titleUzCyrillic;
+      case "ru":
+        return titleRu;
+      case "en":
+        return titleEn;
+    }
+  };
 
   const getContentValue = () => {
     switch (activeTab) {
@@ -225,6 +251,72 @@ export default function EditArticlePage() {
         return contentEn;
     }
   };
+
+  const handleAutoTranslate = async () => {
+    setTranslateError(null);
+
+    const sourceTitle = (getTitleValue() || "").trim();
+    const sourceContent = (getContentValue() || "").trim();
+    if (!sourceTitle && !sourceContent) {
+      setTranslateError("Enter a title or content before translating.");
+      return;
+    }
+
+    const targetLanguages = LANGUAGES.map((lang) => lang.key).filter(
+      (lang) => lang !== activeTab
+    );
+
+    const existingTargets = targetLanguages.filter((lang) => {
+      const currentTitle = String(
+        getValues(`title_${lang}` as keyof ArticleFormData) || ""
+      );
+      const currentContent = String(
+        getValues(`content_${lang}` as keyof ArticleFormData) || ""
+      );
+      return currentTitle.trim() || currentContent.trim();
+    });
+
+    if (existingTargets.length > 0) {
+      const existingLabels = existingTargets
+        .map(
+          (lang) => LANGUAGES.find((item) => item.key === lang)?.label || lang
+        )
+        .join(", ");
+      if (
+        !confirm(
+          `This will overwrite existing translations for: ${existingLabels}. Continue?`
+        )
+      ) {
+        return;
+      }
+    }
+
+    try {
+      setIsTranslating(true);
+      const result = await translateArticle({
+        sourceLanguage: activeTab,
+        targets: targetLanguages,
+        title: sourceTitle,
+        content: sourceContent,
+      });
+
+      for (const [lang, translation] of Object.entries(
+        result.translations
+      ) as [LanguageKey, { title: string; content: string }][]) {
+        setValue(`title_${lang}` as keyof ArticleFormData, translation.title);
+        setValue(`content_${lang}` as keyof ArticleFormData, translation.content);
+      }
+    } catch (err) {
+      setTranslateError(
+        err instanceof Error ? err.message : "Translation failed"
+      );
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const activeLanguageLabel =
+    LANGUAGES.find((language) => language.key === activeTab)?.label || activeTab;
 
   const setContentValue = (value: string) => {
     switch (activeTab) {
@@ -400,6 +492,28 @@ export default function EditArticlePage() {
               onTabChange={setActiveTab}
               missingLanguages={missingLanguages}
             />
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Write in one language and auto-translate the rest.
+              </p>
+              <button
+                type="button"
+                onClick={handleAutoTranslate}
+                disabled={isTranslating || isSubmitting}
+                className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 disabled:opacity-60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+              >
+                {isTranslating
+                  ? "Translating..."
+                  : `Auto-translate from ${activeLanguageLabel}`}
+              </button>
+            </div>
+
+            {translateError && (
+              <div className="mt-3 text-sm text-red-600 dark:text-red-400">
+                {translateError}
+              </div>
+            )}
 
             <div className="mt-6 space-y-6">
               {/* Title input for current language */}
